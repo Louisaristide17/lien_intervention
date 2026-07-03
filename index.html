@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>TechIntervention - Fiches de Maintenance</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- jsPDF + html2canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Signature Pad -->
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+</head>
+<body>
+<!-- ===== NAVIGATION ===== -->
+<nav class="navbar">
+    <div class="nav-brand">🔧 TechIntervention</div>
+    <div class="nav-menu">
+        <button class="nav-btn active" onclick="showScreen('dashboard')">🏠 Accueil</button>
+        <button class="nav-btn" onclick="showScreen('clients')">👥 Clients</button>
+        <button class="nav-btn" onclick="showScreen('interventions')">📋 Interventions</button>
+    </div>
+</nav>
+
+<!-- ===== DASHBOARD ===== -->
+<div id="screen-dashboard" class="screen active">
+    <div class="dashboard-hero">
+        <h1>Gestion des Interventions</h1>
+        <p>Application mobile-first pour techniciens de maintenance</p>
+    </div>
+    <div class="dashboard-cards">
+        <div class="card card-primary" onclick="newIntervention()">
+            <div class="card-icon">➕</div>
+            <div class="card-title">Nouvelle Intervention</div>
+            <div class="card-sub">Créer une fiche d'intervention</div>
+        </div>
+        <div class="card card-secondary" onclick="showScreen('clients')">
+            <div class="card-icon">👥</div>
+            <div class="card-title">Gérer les Clients</div>
+            <div class="card-sub">Ajouter, modifier, supprimer</div>
+        </div>
+        <div class="card card-info" onclick="showScreen('interventions')">
+            <div class="card-icon">📋</div>
+            <div class="card-title">Historique</div>
+            <div class="card-sub">Voir toutes les interventions</div>
+        </div>
+    </div>
+    <div class="recent-section">
+        <h2>Dernières interventions</h2>
+        <div id="recent-list">
+            <p class="empty-msg">Aucune intervention pour le moment.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ===== CLIENTS ===== -->
+<div id="screen-clients" class="screen">
+    <div class="screen-header">
+        <h2>👥 Gestion des Clients</h2>
+        <button class="btn-primary" onclick="openClientModal()">+ Ajouter un client</button>
+    </div>
+    <input type="text" id="client-search" class="search-input" placeholder="🔍 Rechercher un client..." oninput="filterClients()">
+    <div id="clients-list" class="list-container"></div>
+</div>
+
+<!-- Modal Client -->
+<div id="modal-client" class="modal-overlay" style="display:none">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 id="modal-client-title">Ajouter un client</h3>
+            <button class="close-btn" onclick="closeClientModal()">✕</button>
+        </div>
+        <form id="form-client" onsubmit="saveClient(event)">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Nom / Raison sociale *</label>
+                    <input type="text" id="c-nom" required placeholder="Ex: Société ABC">
+                </div>
+                <div class="form-group">
+                    <label>Adresse</label>
+                    <input type="text" id="c-adresse" placeholder="Ex: 12 rue de la Paix">
+                </div>
+                <div class="form-group">
+                    <label>Ville</label>
+                    <input type="text" id="c-ville" placeholder="Ex: Paris">
+                </div>
+                <div class="form-group">
+                    <label>Téléphone</label>
+                    <input type="tel" id="c-tel" placeholder="Ex: 06 12 34 56 78">
+                </div>
+                <div class="form-group">
+                    <label>Nom du contact sur site</label>
+                    <input type="text" id="c-contact" placeholder="Ex: Jean Dupont">
+                </div>
+                <div class="form-group">
+                    <label>Poste / Fonction du contact</label>
+                    <input type="text" id="c-poste" placeholder="Ex: Responsable technique">
+                </div>
+            </div>
+            <input type="hidden" id="c-id">
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeClientModal()">Annuler</button>
+                <button type="submit" class="btn-primary">Enregistrer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ===== INTERVENTIONS LIST ===== -->
+<div id="screen-interventions" class="screen">
+    <div class="screen-header">
+        <h2>📋 Historique des Interventions</h2>
+        <button class="btn-primary" onclick="newIntervention()">+ Nouvelle</button>
+    </div>
+    <div id="interventions-list" class="list-container"></div>
+</div>
+
+<!-- ===== FORMULAIRE INTERVENTION ===== -->
+<div id="screen-form" class="screen">
+    <div class="screen-header">
+        <button class="btn-back" onclick="showScreen('interventions')">← Retour</button>
+        <h2>📝 Fiche d'Intervention</h2>
+        <button class="btn-secondary" onclick="saveDraft()">💾 Brouillon</button>
+    </div>
+
+    <!-- EN-TETE -->
+    <div class="form-section">
+        <h3 class="section-title">Informations générales</h3>
+        <div class="form-grid">
+            <div class="form-group">
+                <label>Client *</label>
+                <select id="f-client" required onchange="fillClientInfo()">
+                    <option value="">-- Sélectionner un client --</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Date d'intervention</label>
+                <input type="date" id="f-date">
+            </div>
+            <div class="form-group">
+                <label>N° de fiche</label>
+                <input type="text" id="f-numero" placeholder="Auto-généré">
+            </div>
+            <div class="form-group">
+                <label>Technicien</label>
+                <input type="text" id="f-technicien" placeholder="Nom du technicien">
+            </div>
+        </div>
+        <!-- Info client affichée -->
+        <div id="client-info-display" class="client-info-box" style="display:none">
+            <strong>📍 Adresse :</strong> <span id="ci-adresse"></span> &nbsp;
+            <strong>📞 Tel :</strong> <span id="ci-tel"></span> &nbsp;
+            <strong>👤 Contact :</strong> <span id="ci-contact"></span>
+        </div>
+    </div>
+
+    <!-- TYPE D'INTERVENTION -->
+    <div class="form-section accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+            <h3>1. Type d'intervention</h3><span class="acc-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+            <label class="section-label">Nature :</label>
+            <div class="checkbox-grid">
+                <label><input type="checkbox" name="nature" value="Maintenance préventive"> Maintenance préventive</label>
+                <label><input type="checkbox" name="nature" value="Maintenance corrective"> Maintenance corrective</label>
+                <label><input type="checkbox" name="nature" value="Installation"> Installation</label>
+                <label><input type="checkbox" name="nature" value="Mise en service"> Mise en service</label>
+                <label><input type="checkbox" name="nature" value="Formation"> Formation</label>
+                <label><input type="checkbox" name="nature" value="Autre"> Autre</label>
+            </div>
+            <label class="section-label">Origine :</label>
+            <div class="checkbox-grid">
+                <label><input type="radio" name="origine" value="Contrat"> Contrat</label>
+                <label><input type="radio" name="origine" value="Demande client"> Demande client</label>
+                <label><input type="radio" name="origine" value="Garantie"> Garantie</label>
+                <label><input type="radio" name="origine" value="Urgence"> Urgence</label>
+                <label><input type="radio" name="origine" value="Visite programmée"> Visite programmée</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- IDENTIFICATION MATERIEL -->
+    <div class="form-section accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+            <h3>2. Identification du matériel</h3><span class="acc-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Marque</label>
+                    <input type="text" id="m-marque" placeholder="Ex: Motorola">
+                </div>
+                <div class="form-group">
+                    <label>Modèle</label>
+                    <input type="text" id="m-modele" placeholder="Ex: DP4800">
+                </div>
+                <div class="form-group">
+                    <label>N° de série</label>
+                    <input type="text" id="m-serie" placeholder="Ex: SN123456">
+                </div>
+                <div class="form-group">
+                    <label>N° de parc / Inventaire</label>
+                    <input type="text" id="m-parc" placeholder="Ex: INV-001">
+                </div>
+                <div class="form-group">
+                    <label>Fréquence / Canal</label>
+                    <input type="text" id="m-freq" placeholder="Ex: 466 MHz">
+                </div>
+                <div class="form-group">
+                    <label>Accessoires présents</label>
+                    <input type="text" id="m-accessoires" placeholder="Antenne, batterie, chargeur...">
+                </div>
+            </div>
+            <label class="section-label">État visuel :</label>
+            <div class="checkbox-grid">
+                <label><input type="checkbox" name="etat" value="Bon état général"> Bon état général</label>
+                <label><input type="checkbox" name="etat" value="Traces de chocs"> Traces de chocs</label>
+                <label><input type="checkbox" name="etat" value="Corrosion"> Corrosion</label>
+                <label><input type="checkbox" name="etat" value="Écran endommagé"> Écran endommagé</label>
+                <label><input type="checkbox" name="etat" value="Boutons défectueux"> Boutons défectueux</label>
+                <label><input type="checkbox" name="etat" value="Batterie gonflée"> Batterie gonflée</label>
+                <label><input type="checkbox" name="etat" value="Antenne cassée"> Antenne cassée</label>
+                <label><input type="checkbox" name="etat" value="Connecteurs oxydés"> Connecteurs oxydés</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- DIAGNOSTIC -->
+    <div class="form-section accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+            <h3>3. Diagnostic</h3><span class="acc-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+            <div class="two-cols">
+                <div>
+                    <label class="section-label">Problèmes signalés par le client :</label>
+                    <div class="checkbox-list">
+                        <label><input type="checkbox" name="pb_signale" value="Pas de communication"> Pas de communication</label>
+                        <label><input type="checkbox" name="pb_signale" value="Mauvaise qualité audio"> Mauvaise qualité audio</label>
+                        <label><input type="checkbox" name="pb_signale" value="Portée insuffisante"> Portée insuffisante</label>
+                        <label><input type="checkbox" name="pb_signale" value="Ne s'allume pas"> Ne s'allume pas</label>
+                        <label><input type="checkbox" name="pb_signale" value="Batterie faible"> Batterie faible</label>
+                        <label><input type="checkbox" name="pb_signale" value="Touche bloquée"> Touche bloquée</label>
+                        <label><input type="checkbox" name="pb_signale" value="Interférence"> Interférence</label>
+                        <label><input type="checkbox" name="pb_signale" value="Affichage défaillant"> Affichage défaillant</label>
+                    </div>
+                </div>
+                <div>
+                    <label class="section-label">Anomalies constatées par le technicien :</label>
+                    <div class="checkbox-list">
+                        <label><input type="checkbox" name="anomalie" value="Circuit électronique défectueux"> Circuit électronique défectueux</label>
+                        <label><input type="checkbox" name="anomalie" value="Condensateur HS"> Condensateur HS</label>
+                        <label><input type="checkbox" name="anomalie" value="Antenne endommagée"> Antenne endommagée</label>
+                        <label><input type="checkbox" name="anomalie" value="Connecteur corrodé"> Connecteur corrodé</label>
+                        <label><input type="checkbox" name="anomalie" value="Batterie défaillante"> Batterie défaillante</label>
+                        <label><input type="checkbox" name="anomalie" value="Firmware obsolète"> Firmware obsolète</label>
+                        <label><input type="checkbox" name="anomalie" value="Programmation incorrecte"> Programmation incorrecte</label>
+                        <label><input type="checkbox" name="anomalie" value="Micro / Haut-parleur HS"> Micro / Haut-parleur HS</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TRAVAUX EFFECTUES -->
+    <div class="form-section accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+            <h3>4. Travaux effectués</h3><span class="acc-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+            <label class="section-label">Entretien :</label>
+            <div class="checkbox-grid">
+                <label><input type="checkbox" name="entretien" value="Nettoyage complet"> Nettoyage complet</label>
+                <label><input type="checkbox" name="entretien" value="Vérification programmation"> Vérification programmation</label>
+                <label><input type="checkbox" name="entretien" value="Mise à jour firmware"> Mise à jour firmware</label>
+                <label><input type="checkbox" name="entretien" value="Contrôle fréquence"> Contrôle fréquence</label>
+                <label><input type="checkbox" name="entretien" value="Test batterie"> Test batterie</label>
+                <label><input type="checkbox" name="entretien" value="Vérification accessoires"> Vérification accessoires</label>
+            </div>
+            <label class="section-label">Réparations :</label>
+            <div class="checkbox-grid">
+                <label><input type="checkbox" name="reparation" value="Remplacement batterie"> Remplacement batterie</label>
+                <label><input type="checkbox" name="reparation" value="Remplacement antenne"> Remplacement antenne</label>
+                <label><input type="checkbox" name="reparation" value="Reprogrammation"> Reprogrammation</label>
+                <label><input type="checkbox" name="reparation" value="Soudure / carte"> Soudure / carte</label>
+                <label><input type="checkbox" name="reparation" value="Remplacement micro/HP"> Remplacement micro/HP</label>
+                <label><input type="checkbox" name="reparation" value="Remplacement connecteur"> Remplacement connecteur</label>
+            </div>
+            <div class="form-group">
+                <label>Observations complémentaires sur les travaux :</label>
+                <textarea id="f-travaux-obs" rows="3" placeholder="Détail des opérations effectuées..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- RESULTAT & SUITE -->
+    <div class="form-section accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+            <h3>5. Résultat &amp; Suite</h3><span class="acc-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+            <label class="section-label">Résultat de l'intervention :</label>
+            <div class="checkbox-grid">
+                <label><input type="radio" name="resultat" value="Matériel réparé"> ✅ Matériel réparé</label>
+                <label><input type="radio" name="resultat" value="Réparation partielle"> ⚠️ Réparation partielle</label>
+                <label><input type="radio" name="resultat" value="Non réparable"> ❌ Non réparable</label>
+                <label><input type="radio" name="resultat" value="En attente pièces"> ⏳ En attente de pièces</label>
+                <label><input type="radio" name="resultat" value="Retour atelier"> 🔧 Retour atelier nécessaire</label>
+            </div>
+            <label class="section-label">Suite à donner :</label>
+            <div class="checkbox-grid">
+                <label><input type="checkbox" name="suite" value="Remettre en service"> Remettre en service</label>
+                <label><input type="checkbox" name="suite" value="Devis complémentaire"> Devis complémentaire</label>
+                <label><input type="checkbox" name="suite" value="2ème visite prévue"> 2ème visite prévue</label>
+                <label><input type="checkbox" name="suite" value="Remplacement matériel"> Remplacement matériel</label>
+                <label><input type="checkbox" name="suite" value="Contrat de maintenance"> Contrat de maintenance</label>
+            </div>
+            <div class="form-group">
+                <label>Précisions :</label>
+                <textarea id="f-suite-obs" rows="2" placeholder="Informations complémentaires sur la suite..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- OBSERVATIONS TECHNICIEN -->
+    <div class="form-section accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+            <h3>6. Observations du technicien</h3><span class="acc-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+            <div class="form-group">
+                <textarea id="f-observations" rows="4" placeholder="Vos observations libres sur l'intervention..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- TEMPS ET DEPLACEMENT -->
+    <div class="form-section accordion">
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+            <h3>7. Récapitulatif temps &amp; déplacement</h3><span class="acc-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Heure d'arrivée</label>
+                    <input type="time" id="f-heure-arrivee">
+                </div>
+                <div class="form-group">
+                    <label>Heure de départ</label>
+                    <input type="time" id="f-heure-depart">
+                </div>
+                <div class="form-group">
+                    <label>Durée d'intervention (h)</label>
+                    <input type="number" id="f-duree" step="0.5" min="0" placeholder="Ex: 2.5">
+                </div>
+                <div class="form-group">
+                    <label>Kilométrage</label>
+                    <input type="number" id="f-km" min="0" placeholder="Ex: 45">
+                </div>
+                <div class="form-group">
+                    <label>Pièces détachées utilisées</label>
+                    <input type="text" id="f-pieces" placeholder="Références des pièces...">
+                </div>
+                <div class="form-group">
+                    <label>Coût estimé (€)</label>
+                    <input type="number" id="f-cout" min="0" step="0.01" placeholder="0.00">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SIGNATURES -->
+    <div class="form-section" id="section-signatures">
+        <h3 class="section-title">✍️ Signatures &amp; Cachets</h3>
+        <div class="signatures-grid">
+
+            <!-- TECHNICIEN -->
+            <div class="sig-block">
+                <label class="sig-label">Technicien</label>
+                <div class="sig-row">
+                    <div class="sig-col">
+                        <canvas id="sig-technicien" class="sig-canvas"></canvas>
+                        <button type="button" class="btn-clear" onclick="clearSig('technicien')">Effacer</button>
+                    </div>
+                    <div class="sig-divider"></div>
+                    <div class="cachet-col">
+                        <div id="cachet-preview-technicien" class="cachet-inline-preview" style="display:none">
+                            <img id="cachet-img-technicien" src="" alt="Cachet technicien">
+                            <button type="button" class="cachet-clear-btn" onclick="clearCachet('technicien')">✕</button>
+                        </div>
+                        <div id="cachet-empty-technicien" class="cachet-empty-zone">
+                            <button type="button" class="cachet-upload-btn" onclick="openCamera('technicien')">
+                                📷 Cachet
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESPONSABLE CLIENT -->
+            <div class="sig-block">
+                <label class="sig-label">Responsable Client</label>
+                <div class="sig-row">
+                    <div class="sig-col">
+                        <canvas id="sig-client" class="sig-canvas"></canvas>
+                        <button type="button" class="btn-clear" onclick="clearSig('client')">Effacer</button>
+                    </div>
+                    <div class="sig-divider"></div>
+                    <div class="cachet-col">
+                        <div id="cachet-preview-client" class="cachet-inline-preview" style="display:none">
+                            <img id="cachet-img-client" src="" alt="Cachet client">
+                            <button type="button" class="cachet-clear-btn" onclick="clearCachet('client')">✕</button>
+                        </div>
+                        <div id="cachet-empty-client" class="cachet-empty-zone">
+                            <button type="button" class="cachet-upload-btn" onclick="openCamera('client')">
+                                📷 Cachet
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESPONSABLE ATELIER -->
+            <div class="sig-block">
+                <label class="sig-label">Responsable Atelier</label>
+                <div class="sig-row">
+                    <div class="sig-col">
+                        <canvas id="sig-atelier" class="sig-canvas"></canvas>
+                        <button type="button" class="btn-clear" onclick="clearSig('atelier')">Effacer</button>
+                    </div>
+                    <div class="sig-divider"></div>
+                    <div class="cachet-col">
+                        <div id="cachet-preview-atelier" class="cachet-inline-preview" style="display:none">
+                            <img id="cachet-img-atelier" src="" alt="Cachet atelier">
+                            <button type="button" class="cachet-clear-btn" onclick="clearCachet('atelier')">✕</button>
+                        </div>
+                        <div id="cachet-empty-atelier" class="cachet-empty-zone">
+                            <button type="button" class="cachet-upload-btn" onclick="openCamera('atelier')">
+                                📷 Cachet
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- BOUTON GENERER PDF -->
+    <div class="form-actions">
+        <button type="button" class="btn-secondary" onclick="saveDraft()">💾 Sauvegarder brouillon</button>
+        <button type="button" class="btn-success" onclick="generatePDF()">📄 Générer le PDF</button>
+    </div>
+</div><!-- fin screen-form -->
+
+<!-- ===== ECRAN APERCU PDF ===== -->
+<div id="screen-pdf" class="screen">
+    <div class="screen-header">
+        <button class="btn-back" onclick="showScreen('form')">← Retour</button>
+        <h2>📄 Aperçu &amp; Envoi</h2>
+    </div>
+    <div class="pdf-actions">
+        <button class="btn-primary" onclick="downloadPDF()">⬇️ Télécharger PDF</button>
+        <button class="btn-email" onclick="sendByEmail()">📧 Envoyer par e-mail</button>
+        <button class="btn-whatsapp" onclick="shareWhatsApp()">💬 Partager WhatsApp</button>
+    </div>
+    <div id="pdf-preview-container">
+        <div id="pdf-content-render"></div>
+    </div>
+</div>
+
+<!-- ===== CONFIRMATION DIALOG ===== -->
+<div id="modal-confirm" class="modal-overlay" style="display:none">
+    <div class="modal modal-small">
+        <div class="modal-header">
+            <h3 id="confirm-title">Confirmer la suppression</h3>
+            <button class="close-btn" onclick="closeConfirm()">✕</button>
+        </div>
+        <p id="confirm-msg" style="padding:16px">Êtes-vous sûr de vouloir continuer ?</p>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeConfirm()">Annuler</button>
+            <button class="btn-danger" id="confirm-ok-btn">Confirmer</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===== MODALE CAMERA CACHET ===== -->
+<div id="modal-camera" class="modal-overlay" style="display:none">
+    <div class="modal modal-camera">
+        <div class="modal-header">
+            <h3 id="camera-title">📷 Photographier le cachet</h3>
+            <button class="close-btn" onclick="closeCamera()">✕</button>
+        </div>
+        <div class="camera-body">
+            <p class="camera-hint">Posez le cachet sur une feuille blanche et centrez-le dans le cadre.</p>
+            <!-- Vue caméra live -->
+            <div class="camera-viewfinder" id="camera-viewfinder">
+                <video id="camera-video" autoplay playsinline muted></video>
+                <div class="camera-guide">
+                    <div class="camera-corner tl"></div>
+                    <div class="camera-corner tr"></div>
+                    <div class="camera-corner bl"></div>
+                    <div class="camera-corner br"></div>
+                </div>
+                <div class="camera-label">Cadrez le cachet ici</div>
+            </div>
+            <!-- Vue aperçu après capture -->
+            <div class="camera-preview-zone" id="camera-preview-zone" style="display:none">
+                <p class="camera-hint preview-label">Vérifiez la photo — relancez si nécessaire.</p>
+                <canvas id="camera-canvas"></canvas>
+            </div>
+            <!-- Sélecteur caméra (avant/arrière) -->
+            <div class="camera-switch-row" id="camera-switch-row">
+                <button type="button" class="btn-cam-switch" id="btn-switch-cam" onclick="switchCamera()">🔄 Retourner la caméra</button>
+            </div>
+        </div>
+        <div class="modal-footer camera-footer">
+            <button type="button" class="btn-secondary" onclick="closeCamera()">Annuler</button>
+            <button type="button" class="btn-cam-retake" id="btn-retake" onclick="retakePhoto()" style="display:none">🔁 Reprendre</button>
+            <button type="button" class="btn-cam-capture" id="btn-capture" onclick="capturePhoto()">📸 Capturer</button>
+            <button type="button" class="btn-success" id="btn-validate" onclick="validatePhoto()" style="display:none">✅ Valider</button>
+        </div>
+    </div>
+</div>
+
+<!-- TOAST NOTIFICATIONS -->
+<div id="toast" class="toast" style="display:none"></div>
+
+<!-- Zone de rendu PDF (cachée) -->
+<div id="pdf-render-zone" style="position:fixed;left:-9999px;top:0;width:794px;background:white;"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
